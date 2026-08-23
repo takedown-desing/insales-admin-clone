@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="description" content="Что внутри админки InSales, какие данные выходят наружу официально и что придётся пересобирать руками.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230C6B72'/><text x='16' y='23' font-size='18' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'>R</text></svg>">
+<title>Разбор админки InSales</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@500;600;700;900&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,500;1,7..72,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+:root{
+  --paper:#F1F4F5;
+  --surface:#FFFFFF;
+  --surface-2:#E7ECEE;
+  --ink:#11212A;
+  --ink-2:#3D515C;
+  --ink-3:#6C818C;
+  --rule:#D2DBDE;
+  --rule-2:#BFCCD1;
+  --accent:#0C6B72;
+  --accent-soft:#DCECEC;
+  --ok:#25705A;
+  --ok-soft:#DBEDE5;
+  --warn:#96551A;
+  --warn-soft:#F6E7D6;
+  --shadow:0 1px 2px rgba(17,33,42,.05),0 8px 24px -16px rgba(17,33,42,.28);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1518;
+    --surface:#151F23;
+    --surface-2:#1D292E;
+    --ink:#E4ECEE;
+    --ink-2:#A9BCC3;
+    --ink-3:#7B8F97;
+    --rule:#26353A;
+    --rule-2:#33474E;
+    --accent:#5CC6CB;
+    --accent-soft:#12333600;
+    --ok:#69C69F;
+    --ok-soft:#12302700;
+    --warn:#D99B5C;
+    --warn-soft:#31210F00;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1518;
+  --surface:#151F23;
+  --surface-2:#1D292E;
+  --ink:#E4ECEE;
+  --ink-2:#A9BCC3;
+  --ink-3:#7B8F97;
+  --rule:#26353A;
+  --rule-2:#33474E;
+  --accent:#5CC6CB;
+  --accent-soft:#12333600;
+  --ok:#69C69F;
+  --ok-soft:#12302700;
+  --warn:#D99B5C;
+  --warn-soft:#31210F00;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -16px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Literata",Georgia,"Times New Roman",serif;
+  font-size:17px;
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,.ui{font-family:"Golos Text","Helvetica Neue",Arial,sans-serif}
+code,kbd,pre,.mono{font-family:"JetBrains Mono","SF Mono",Menlo,Consolas,monospace}
+
+.wrap{
+  max-width:1180px;
+  margin:0 auto;
+  padding:0 24px 96px;
+  display:grid;
+  grid-template-columns:230px minmax(0,1fr);
+  gap:56px;
+  align-items:start;
+}
+@media (max-width:900px){
+  .wrap{grid-template-columns:minmax(0,1fr);gap:0}
+  nav.rail{position:static;border-right:0;border-bottom:1px solid var(--rule);padding-bottom:20px;margin-bottom:28px}
+}
+
+/* ---------- masthead ---------- */
+header.top{
+  border-bottom:1px solid var(--rule);
+  background:var(--surface);
+}
+.top-in{
+  max-width:1180px;margin:0 auto;padding:52px 24px 40px;
+  display:flex;flex-direction:column;gap:20px;
+}
+.kicker{
+  font-family:"Golos Text",sans-serif;font-weight:600;font-size:12px;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+}
+h1{
+  font-weight:900;font-size:clamp(32px,5.2vw,52px);line-height:1.04;
+  letter-spacing:-.02em;margin:0;text-wrap:balance;max-width:16ch;
+}
+.dek{
+  font-size:19px;color:var(--ink-2);max-width:60ch;margin:0;
+}
+.meta-row{
+  display:flex;flex-wrap:wrap;gap:8px 28px;padding-top:8px;
+  font-family:"Golos Text",sans-serif;font-size:13px;color:var(--ink-3);
+}
+.meta-row b{color:var(--ink-2);font-weight:600}
+
+/* ---------- figures strip ---------- */
+.figures{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+  gap:1px;background:var(--rule);border:1px solid var(--rule);
+  border-radius:3px;overflow:hidden;margin-top:8px;
+}
+.fig{background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:2px}
+.fig .n{
+  font-family:"Golos Text",sans-serif;font-weight:900;font-size:28px;
+  line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;
+}
+.fig .l{font-family:"Golos Text",sans-serif;font-size:12.5px;color:var(--ink-3);line-height:1.35}
+
+/* ---------- rail ---------- */
+nav.rail{
+  position:sticky;top:28px;padding-top:44px;
+  font-family:"Golos Text",sans-serif;font-size:13.5px;
+}
+nav.rail ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1px}
+nav.rail a{
+  display:flex;gap:10px;padding:6px 10px 6px 0;color:var(--ink-2);
+  text-decoration:none;border-left:2px solid transparent;padding-left:12px;
+  transition:color .12s,border-color .12s;
+}
+nav.rail a:hover{color:var(--accent);border-left-color:var(--accent)}
+nav.rail a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+nav.rail .num{color:var(--ink-3);font-variant-numeric:tabular-nums;font-weight:600}
+
+/* ---------- content ---------- */
+main{padding-top:44px;min-width:0}
+section{margin-bottom:64px;scroll-margin-top:24px}
+h2{
+  font-weight:900;font-size:27px;line-height:1.15;letter-spacing:-.015em;
+  margin:0 0 6px;text-wrap:balance;
+}
+h2 .h-num{
+  font-family:"JetBrains Mono",monospace;font-weight:600;font-size:14px;
+  color:var(--accent);display:block;margin-bottom:8px;letter-spacing:.02em;
+}
+h3{
+  font-weight:700;font-size:18.5px;line-height:1.3;margin:34px 0 8px;
+  letter-spacing:-.005em;
+}
+h4{
+  font-family:"Golos Text",sans-serif;font-weight:600;font-size:13px;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);
+  margin:28px 0 10px;
+}
+p{margin:0 0 16px;max-width:66ch}
+main ul,main ol{max-width:66ch;padding-left:22px;margin:0 0 16px}
+main li{margin-bottom:7px}
+a{color:var(--accent)}
+strong{font-weight:600;color:var(--ink)}
+code{
+  font-size:.87em;background:var(--surface-2);padding:1px 5px;border-radius:3px;
+  color:var(--ink);white-space:nowrap;
+}
+.lede{font-size:19px;color:var(--ink-2);max-width:64ch}
+
+/* ---------- verification chips: the structural device ---------- */
+.chip{
+  display:inline-flex;align-items:center;gap:6px;vertical-align:2px;
+  font-family:"Golos Text",sans-serif;font-weight:600;font-size:11.5px;
+  letter-spacing:.03em;padding:2px 8px;border-radius:2px;white-space:nowrap;
+  border:1px solid;
+}
+.chip::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.chip.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+.chip.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.chip.doc{color:var(--ink-3);border-color:var(--rule-2);background:transparent}
+.chip-line{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+
+/* ---------- callout ---------- */
+.note{
+  border:1px solid var(--rule);border-left:3px solid var(--accent);
+  background:var(--surface);border-radius:0 3px 3px 0;
+  padding:18px 22px;margin:22px 0;box-shadow:var(--shadow);
+}
+.note.risk{border-left-color:var(--warn)}
+.note > :last-child{margin-bottom:0}
+.note h4{margin-top:0}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:18px 0;border:1px solid var(--rule);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-family:"Golos Text",sans-serif;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--rule);vertical-align:top}
+th{
+  font-weight:600;font-size:11.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--ink-3);background:var(--surface-2);white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:0}
+td.mono,th.mono{font-family:"JetBrains Mono",monospace;font-size:12.5px;white-space:nowrap}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+
+/* ---------- field block ---------- */
+.fields{
+  font-family:"JetBrains Mono",monospace;font-size:12.5px;line-height:1.75;
+  background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+  padding:16px 18px;overflow-x:auto;margin:14px 0;color:var(--ink-2);
+}
+.fields b{color:var(--accent);font-weight:600}
+pre{
+  font-size:12.5px;line-height:1.7;background:var(--surface);border:1px solid var(--rule);
+  border-radius:3px;padding:16px 18px;overflow-x:auto;margin:14px 0;
+}
+
+/* ---------- entity grid ---------- */
+.ents{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:3px;overflow:hidden;margin:18px 0}
+.ent{background:var(--surface);padding:13px 15px}
+.ent .en{font-family:"Golos Text",sans-serif;font-weight:600;font-size:14.5px;margin-bottom:2px}
+.ent .ep{font-family:"JetBrains Mono",monospace;font-size:11.5px;color:var(--ink-3);word-break:break-all}
+.ent .ec{font-family:"Golos Text",sans-serif;font-size:12px;color:var(--accent);font-weight:600;margin-top:4px;font-variant-numeric:tabular-nums}
+
+/* ---------- keep / drop ---------- */
+.kd{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin:18px 0}
+.kd .col{border:1px solid var(--rule);border-radius:3px;background:var(--surface);padding:16px 18px}
+.kd .col.keep{border-top:3px solid var(--ok)}
+.kd .col.drop{border-top:3px solid var(--rule-2)}
+.kd h4{margin-top:0}
+.kd ul{list-style:none;padding:0;margin:0;font-family:"Golos Text",sans-serif;font-size:14px}
+.kd li{padding:5px 0;border-bottom:1px solid var(--rule);margin:0}
+.kd li:last-child{border-bottom:0}
+.kd .col.drop li{color:var(--ink-3)}
+
+footer{
+  border-top:1px solid var(--rule);margin-top:16px;padding-top:22px;
+  font-family:"Golos Text",sans-serif;font-size:13px;color:var(--ink-3);max-width:66ch;
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<div style="max-width:1180px;margin:0 auto;padding:14px 24px 0;font-family:'Golos Text',sans-serif;font-size:13.5px">
+  <a href="index.html">← Открыть копию админки</a>
+</div>
+<header class="top">
+  <div class="top-in">
+    <div class="kicker">Разведка перед услугой переноса · 23 августа 2026</div>
+    <h1>Разбор админки InSales</h1>
+    <p class="dek">Что внутри платформы, какие данные из неё выходят наружу официально, а что придётся пересобирать руками. Всё снято с живого магазина, а не прочитано в документации.</p>
+    <div class="meta-row">
+      <span>Источник: <b>myshop-dff524.myinsales.ru</b></span>
+      <span>Тариф: <b>пробный, 7 дней</b></span>
+      <span>Метод: <b>обход браузером + опрос API</b></span>
+    </div>
+    <div class="figures">
+      <div class="fig"><span class="n">150</span><span class="l">страниц админки снято</span></div>
+      <div class="fig"><span class="n">137</span><span class="l">скриншотов экранов</span></div>
+      <div class="fig"><span class="n">77</span><span class="l">эндпоинтов в трафике</span></div>
+      <div class="fig"><span class="n">22</span><span class="l">API с живыми данными</span></div>
+      <div class="fig"><span class="n">13</span><span class="l">сущностей с полями</span></div>
+      <div class="fig"><span class="n">15</span><span class="l">разделов к переносу из 53</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="rail" aria-label="Разделы">
+    <ol>
+      <li><a href="#zadacha"><span class="num">01</span><span>Задача</span></a></li>
+      <li><a href="#ustройство"><span class="num">02</span><span>Как устроена админка</span></a></li>
+      <li><a href="#karta"><span class="num">03</span><span>Карта разделов</span></a></li>
+      <li><a href="#nastroyki"><span class="num">04</span><span>Второй уровень</span></a></li>
+      <li><a href="#model"><span class="num">05</span><span>Модель данных</span></a></li>
+      <li><a href="#ekrany"><span class="num">06</span><span>Экраны к повтору</span></a></li>
+      <li><a href="#vygruzka"><span class="num">07</span><span>Каналы выгрузки</span></a></li>
+      <li><a href="#dyry"><span class="num">08</span><span>Что не проверено</span></a></li>
+      <li><a href="#vopros"><span class="num">09</span><span>Открытый вопрос</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <section id="zadacha">
+      <h2><span class="h-num">01</span>Задача</h2>
+      <p class="lede">Оффер: «Хватит платить InSales 150–170 тысяч в год — перенесём ваш магазин на обычный хостинг за 48 тысяч, всё останется один в один, включая привычную админку». Окупаемость для клиента около четырёх месяцев.</p>
+      <p>Ближайший шаг — не построить это, а понять, <em>как</em> делать перенос повторяемо: один раз собрать процедуру, чтобы каждый следующий клиент занимал часы, а не недели, и чтобы ничего не терялось.</p>
+      <p>Задача распадается на четыре разные работы, которые легко перепутать между собой:</p>
+      <ol>
+        <li><strong>Витрина</strong> — фронт сайта один в один, с сохранением SEO</li>
+        <li><strong>Данные</strong> — товары, категории, картинки, страницы, мета-теги</li>
+        <li><strong>Админка</strong> — упрощённая копия: товары, цены, фото, остатки</li>
+        <li><strong>Учётная система</strong> — синхронизация остатков с МойСклад</li>
+      </ol>
+      <h4>Как читать этот документ</h4>
+      <div class="chip-line">
+        <span class="chip ok">проверено живьём</span>
+        <span class="chip doc">по документации</span>
+        <span class="chip warn">не проверено или ограничено</span>
+      </div>
+      <p>Метки стоят у каждого утверждения, которое влияет на оценку сроков. Разница между «работает» и «должно работать» здесь стоит недель.</p>
+    </section>
+
+    <section id="ustройство">
+      <h2><span class="h-num">02</span>Как устроена админка</h2>
+      <p><code>admin2</code> — одностраничное приложение на Vue. Готового HTML с формами оно не отдаёт: поля рисуются на клиенте, атрибутов <code>name</code> у них нет, только автогенерённые <code>input-715</code>. Настоящий контракт данных живёт в JSON-запросах между приложением и сервером.</p>
+      <div class="note">
+        <h4>Что из этого следует</h4>
+        <p>Нашу админку можно делать на любом стеке. Клиент воспринимает расположение экранов, названия полей и порядок действий — не технологию под ними. Копировать надо интерфейс и логику, а не архитектуру InSales.</p>
+      </div>
+      <p><span class="chip ok">проверено живьём</span> Официальный REST API <code>/admin/*.json</code> отвечает прямо по сессионной куке администратора, без API-ключа. Проверено на 22 эндпоинтах, включая полный цикл записи: создание товара вернуло <code>201</code>, удаление — <code>200</code>, каталог вернулся к нулю.</p>
+    </section>
+
+    <section id="karta">
+      <h2><span class="h-num">03</span>Карта разделов</h2>
+      <p>В основном меню 53 пункта. К услуге переноса относятся 15 — остальное обвес платформы, за который клиент платит, но который в переносе воспроизводить бессмысленно.</p>
+      <div class="kd">
+        <div class="col keep">
+          <h4>Ядро — повторяем</h4>
+          <ul>
+            <li>Заказы</li>
+            <li>Каталог товаров</li>
+            <li>Цены и остатки</li>
+            <li>Импорт / экспорт</li>
+            <li>Клиенты</li>
+            <li>Скидки</li>
+            <li>Страницы и документы</li>
+            <li>Блог и статьи</li>
+            <li>Данные сайта</li>
+            <li>Способы доставки</li>
+            <li>Способы оплаты</li>
+            <li>Домены</li>
+            <li>Счётчики и коды</li>
+            <li>Файлы</li>
+            <li>Дизайн</li>
+          </ul>
+        </div>
+        <div class="col drop">
+          <h4>Обвес — не повторяем</h4>
+          <ul>
+            <li>Аналитика — 10 экранов</li>
+            <li>Диалоги и чаты — 6 экранов</li>
+            <li>Продвижение и каналы</li>
+            <li>Брошенные корзины</li>
+            <li>Товарные выгрузки на маркетплейсы</li>
+            <li>Отгрузки</li>
+            <li>Задачи</li>
+            <li>Поиск ниши Ozon</li>
+            <li>Расширения</li>
+            <li>Услуги и оплата</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="nastroyki">
+      <h2><span class="h-num">04</span>Второй уровень: настройки</h2>
+      <p>В основном меню его не видно — это 24 отдельных экрана внутри раздела «Настройки». Здесь лежит то, что при переносе теряется молча и бьёт по позициям.</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Экран</th><th class="mono">Путь</th><th>Почему критично</th></tr></thead>
+          <tbody>
+            <tr><td>SEO-шаблоны</td><td class="mono">/admin2/seo_templates</td><td>Три пары title и description — для главной, товаров и категорий. Поддерживают Liquid с <code>account</code>, <code>product</code>, <code>collection</code>. Не перенесёшь — слетят мета-теги на всём каталоге разом</td></tr>
+            <tr><td>Редиректы</td><td class="mono">/admin2/redirects</td><td>Свой список с загрузкой из файла. Копится годами</td></tr>
+            <tr><td>Robots.txt</td><td class="mono">/admin2/robots</td><td>Редактируется в админке. На неопубликованном магазине там <code>Disallow: /</code> — легко утащить заглушку на боевой сайт</td></tr>
+            <tr><td>Пользовательские статусы</td><td class="mono">/admin2/custom_statuses</td><td>Все восемь статусов заказа редактируются клиентом. В нашей админке список должен быть настраиваемым, а не захардкоженным</td></tr>
+            <tr><td>Оформление заказа</td><td class="mono">/admin2/checkout</td><td>21 настройка: геолокация, определение по IP, пошаговый или одностраничный чекаут, варианты согласия на ПД, защита от автозаказов, минимальная сумма</td></tr>
+            <tr><td>Системные сниппеты</td><td class="mono">/admin2/system_snippets</td><td>Платформенные инклюды, на которых держится разметка темы</td></tr>
+            <tr><td>Шаблоны писем</td><td class="mono">/admin2/templates</td><td>Письма покупателям — отдельный пласт работы</td></tr>
+            <tr><td>Мультисклад</td><td class="mono">/admin2/warehouses</td><td>Точка стыка с учётной системой</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Плюс: карточка магазина (30 полей), налоги, страны, языки, валюты, договор, пользователи, авторизация (15 полей), заказ в один клик (13 полей), свойства вариантов (30 полей), дополнительные поля, типы цен, опции, аксессуары, история запросов.</p>
+    </section>
+
+    <section id="model">
+      <h2><span class="h-num">05</span>Модель данных</h2>
+      <p><span class="chip ok">проверено живьём</span> Все поля ниже — из реальных ответов API этого магазина, не из документации.</p>
+
+      <div class="ents">
+        <div class="ent"><div class="en">Товар</div><div class="ep">/admin/products.json</div><div class="ec">35 полей</div></div>
+        <div class="ent"><div class="en">Вариант</div><div class="ep">/admin/products/{id}/variants.json</div><div class="ec">26 полей</div></div>
+        <div class="ent"><div class="en">Заказ</div><div class="ep">/admin/orders.json</div><div class="ec">59 полей</div></div>
+        <div class="ent"><div class="en">Клиент</div><div class="ep">/admin/clients.json</div><div class="ec">29 полей</div></div>
+        <div class="ent"><div class="en">Магазин</div><div class="ep">/admin/account.json</div><div class="ec">32 поля</div></div>
+        <div class="ent"><div class="en">Коллекция</div><div class="ep">/admin/collections.json</div><div class="ec">19 полей</div></div>
+        <div class="ent"><div class="en">Поле чекаута</div><div class="ep">/admin/fields.json</div><div class="ec">19 полей · 23 записи</div></div>
+        <div class="ent"><div class="en">Способ доставки</div><div class="ep">/admin/delivery_variants.json</div><div class="ec">24 поля</div></div>
+        <div class="ent"><div class="en">Блог</div><div class="ep">/admin/blogs.json</div><div class="ec">12 полей</div></div>
+        <div class="ent"><div class="en">Способ оплаты</div><div class="ep">/admin/payment_gateways.json</div><div class="ec">11 полей</div></div>
+        <div class="ent"><div class="en">Тема</div><div class="ep">/admin/themes.json</div><div class="ec">10 полей</div></div>
+        <div class="ent"><div class="en">Свойство товара</div><div class="ep">/admin/properties.json</div><div class="ec">7 полей · 33 записи</div></div>
+        <div class="ent"><div class="en">Категория учёта</div><div class="ep">/admin/categories.json</div><div class="ec">6 полей</div></div>
+      </div>
+
+      <h3>Товар</h3>
+      <div class="fields">id, category_id, created_at, updated_at, is_hidden, available,<br>canonical_url_collection_id, archived, unit, sort_weight, bundle,<br>ignore_discounts, vat, dimensions, fiscal_product_type, custom_template,<br>title, short_description, <b>permalink, html_title, meta_keywords, meta_description</b>,<br>currency_code, collections_ids, sales_channels_id, description,<br>images[], video_links[], option_names[], properties[], characteristics[],<br>product_accessory_links[], product_field_values[], product_bundle_components[], variants[]</div>
+      <p>Выделенное — SEO-слой карточки, его перенос обязателен. <code>fiscal_product_type</code> и <code>vat</code> относятся к 54-ФЗ и всплывут при обсуждении оплаты.</p>
+
+      <h3>Вариант товара</h3>
+      <div class="fields">id, title, product_id, <b>sku, barcode</b>, dimensions, available,<br>image_ids[], image_id, <b>weight, quantity, quantity_at_warehouse0</b>,<br><b>price, base_price, old_price, cost_price</b>,<br>price_in_site_currency, base_price_in_site_currency, old_price_in_site_currency,<br>cost_price_in_site_currency, prices[], prices_in_site_currency[],<br>variant_field_values[], option_values[], created_at, updated_at</div>
+      <p>Цена живёт на варианте, не на товаре. Там же себестоимость, старая цена, штрихкод, вес и остаток по складу. Товар без опций всё равно имеет один вариант с пустым <code>title</code>.</p>
+
+      <h3>Заказ</h3>
+      <p>59 полей. Помимо ожидаемого — позиции, адрес, суммы, статусы, доставка, оплата — InSales пишет в каждый заказ источник трафика:</p>
+      <div class="fields"><b>first_referer, first_current_location, first_query, first_source_domain, first_source</b>,<br>referer, current_location, query, source_domain, source</div>
+      <p>Для отчётности это ценно, при переносе теряется первым. Статусы заказа: Новый, В обработке, Согласован, Отгружен, Доставлен, В процессе возврата, Возврат, Отменён. Статус оплаты — отдельным полем.</p>
+
+      <h3>Клиент</h3>
+      <p>29 полей, среди них <code>external_id</code> и <code>external_service</code> — готовое место для связки с внешней учётной системой. Для интеграции с МойСклад это уже предусмотренная точка стыка, изобретать не придётся.</p>
+
+      <h4>Массовые операции каталога</h4>
+      <p>Найдены маршруты панели групповых действий — их тоже надо повторить:</p>
+      <div class="fields">batch_set_category · group_destroy · make_hidden · remove_hidden<br>set_no_delivery · clear_no_delivery · add_characteristic · remove_characteristic</div>
+    </section>
+
+    <section id="ekrany">
+      <h2><span class="h-num">06</span>Экраны к повтору</h2>
+
+      <h3>Карточка товара</h3>
+      <p>Фото загрузкой файлом, название, описание в визуальном редакторе с кнопкой «Создать с AI», галка дополнительного описания, три ценовых поля, количество с плейсхолдером <code>∞</code>, галка «Показывать», поиск по категориям, поиск по коллекциям.</p>
+
+      <h3>Карточка заказа</h3>
+      <p>Шапка с номером, датой и кнопками «Оформить доставку» и «Копировать». Три селекта: статус заказа, статус оплаты, способ оплаты. Таблица позиций:</p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Фото</th><th>Артикул</th><th>Наименование</th><th>Цена</th><th>Вес</th><th>Кол-во</th><th>Резерв</th><th>Остаток</th><th>Сумма</th></tr></thead>
+          <tbody><tr><td>—</td><td class="mono">—</td><td>[Пример] Кашпо</td><td class="num">5 100,00 ₽</td><td class="num">0,84</td><td class="num">1 шт</td><td class="num">1 шт</td><td class="num">998 шт</td><td class="num">5 100,00 ₽</td></tr></tbody>
+        </table>
+      </div>
+      <p>Колонки «Резерв» и «Остаток» прямо в заказе — это и есть стык со складским учётом: при интеграции с МойСклад остатки придут именно сюда. Действия: Позиция, Скидка в процентах или рублях, Купон, Печать, Отправить письмо, Чат, Выбрать из каталога.</p>
+
+      <h3>Цены и остатки</h3>
+      <p>Вкладки «Все / Цены / Остатки». Колонки: название, себестоимость, склад, цена продажи, скидка, цена до скидки, штрихкод. Фильтры по диапазонам для каждого числового поля, наличие фото, наличие остатка. Массовые изменения и акции с периодом действия.</p>
+
+      <h3>Новый клиент</h3>
+      <p>Имя, телефон, почта — обязательные. Подписка на новости, согласие на обработку персональных данных (обязательное), уведомления о заказе, населённый пункт (обязательный), индекс, улица, дом, квартира.</p>
+
+      <h3>Страница и блог</h3>
+      <p>У страницы: заголовок, пермалинк с префиксом <code>домен/page/</code>, редактор, SEO-поле, галка показа на сайте. У блога дополнительно: категория, настройки комментариев, уведомления, CAPTCHA, проверка на спам, запрет ссылок в комментариях, тег title и мета-описание.</p>
+    </section>
+
+    <section id="vygruzka">
+      <h2><span class="h-num">07</span>Каналы выгрузки магазина</h2>
+      <p>Парсить каталог не нужно. С вёрсткой сложнее, чем казалось на старте.</p>
+
+      <h3>Данные <span class="chip ok">работает</span></h3>
+      <p>Базовый URL <code>https://{домен}/admin/{сущность}.json</code>, Basic-аутентификация. Забираем products с вариантами и картинками, collections, categories, option_names, properties, orders, clients, pages, blogs, menus, fields, delivery_variants, payment_gateways, account.</p>
+      <div class="note risk">
+        <h4>Подводный камень с ключами</h4>
+        <p><span class="chip warn">ограничение тарифа</span> На пробном тарифе создать API-ключ не дают: экран «Ключи доступа» отвечает «Достигнут лимит активных ключей. Улучшите свой тарифный план или докупите опцию отдельно». У клиента доступ к API может оказаться платной опцией — проверять надо на входе, до обещаний по срокам.</p>
+        <p>Обходной путь, который сработал: все <code>/admin/*.json</code> отвечают по обычной сессионной куке администратора, без ключа вообще. Для разовой выгрузки при переносе этого достаточно, для постоянной интеграции — нет, сессия живёт недолго.</p>
+      </div>
+
+      <h3>Исходники темы <span class="chip ok">работает частично</span></h3>
+      <pre>GET /admin/themes.json                              → id темы, is_published
+GET /admin/themes/{theme_id}/assets.json            → список файлов темы
+GET /admin/themes/{theme_id}/assets/{asset_id}.json → поле content с исходником</pre>
+      <p>Тема «Base» состоит из 24 файлов. Забрались 17 — все Liquid-шаблоны и сниппеты. Не забрались 7: <code>.scss</code>, <code>.js</code>, <code>.png</code> и четыре <code>config/*.json</code> — у них поля <code>content</code> нет, только ссылка на CDN, а нужный хост на магазине без домена пустой.</p>
+      <pre>templates/   index · product · collection · cart · page · blog · article · search
+             compare · favorite · shared_cart · page_404
+             layouts.layout · layouts.checkout2 · layouts.client_account
+snippets/    head · styles
+config/      settings · setup · messages · settings_data
+             theme.scss · theme.js · favicon.png</pre>
+
+      <h3>Почему «крутить их Liquid у себя» не сработает на новых темах</h3>
+      <p>Главная находка. Шаблоны современной темы пустые — вся разметка вынесена в виджеты:</p>
+      <pre>{% for widgetDrop in widget_lists.product-list.widgets %}
+  {% widget widgetDrop %}
+{% endfor %}</pre>
+      <p><code>product.liquid</code> весит 97 байт, <code>index.liquid</code> — 95. Определения виджетов наружу не отдаются: <code>/admin/widgets.json</code>, <code>/admin/widget_lists.json</code> и все варианты с идентификатором темы отвечают 404. Сверх того, в шаблонах сидят системные инклюды платформы — <code>system_seo_description</code>, <code>system_v4_meta_data</code>, <code>system_microdata</code>, — которых в исходниках темы тоже нет.</p>
+      <div class="note">
+        <h4>Два сценария, и на входе каждого клиента надо определить, какой</h4>
+        <p><strong>Старая кастомная тема.</strong> Разметка лежит прямо в Liquid-шаблонах. Исходники через Asset API дают почти готовую вёрстку, остаётся заменить теги на свои.</p>
+        <p><strong>Новая виджетная тема</strong>, как «Base». Исходники дают только каркас <code>layouts.layout</code> и <code>head</code> со всей SEO-логикой. Саму разметку страниц придётся брать из отрендеренного HTML витрины и пересобирать — то есть ровно так, как предлагалось изначально.</p>
+      </div>
+      <p>Asset API при этом всё равно полезен: <code>head.liquid</code> показывает точную логику canonical и мета-тегов, <code>layouts.layout</code> даёт HTML-скелет, <code>config/settings</code> — параметры темы. Это не заменяет вёрстку, но избавляет от угадывания.</p>
+    </section>
+
+    <section id="dyry">
+      <h2><span class="h-num">08</span>Что не проверено</h2>
+      <p>Честный список, чтобы на него не наткнуться в момент, когда сроки уже названы.</p>
+      <ul>
+        <li>Бинарные ассеты темы — <code>content</code> через API не отдаётся, нужен CDN-хост, а на магазине без домена он пустой. Проверить на реальном клиенте.</li>
+        <li>Создание API-ключа на платном тарифе — на триале заблокировано лимитом.</li>
+        <li>Экран редактирования существующего товара <code>/admin2/products/{id}</code> редиректит на главную, реальный маршрут не найден.</li>
+        <li>Структура товара снята с созданного и тут же удалённого — в магазине не было ни одного товара.</li>
+        <li>Интеграция с МойСклад — не трогал, нужен их тестовый аккаунт.</li>
+        <li>Часть эндпоинтов <code>admin2</code> отвечает 406 на сессии. Официальные аналоги <code>/admin/*</code> при этом работают, так что на дело не влияет.</li>
+      </ul>
+    </section>
+
+    <section id="vopros">
+      <h2><span class="h-num">09</span>Открытый вопрос</h2>
+      <p class="lede">Это вилка между «два дня на клиента» и «два месяца», и пока она не закрыта, любая оценка сроков держаться не будет.</p>
+      <p>Магазин — это не только витрина, каталог и админка. InSales из коробки даёт корзину, оформление заказа, эквайринг, доставку, онлайн-кассу с чеками по 54-ФЗ и письма покупателям. На главной странице их админки висит баннер «Эквайринг + онлайн-касса» — это ядро продукта, за него и платят.</p>
+      <p>Если продаём «один в один», всё это надо строить или подключать сторонними сервисами, и хостингом за 500 рублей дело не обойдётся. Если продаём витрину, каталог и заявки с уходом заказа в МойСклад или на почту — задача реалистична в заявленные сроки и деньги.</p>
+      <div class="note risk">
+        <h4>Второй вопрос, помельче</h4>
+        <p>Тема магазина может быть платной — от InSales или стороннего разработчика. Товары и контент принадлежат клиенту, дизайн темы — нет. Практический выход: пересобирать вёрстку по исходникам, а не выкладывать их файлы как есть, либо смотреть лицензию конкретной темы.</p>
+      </div>
+    </section>
+
+    <footer>
+      Сырые материалы — 150 страниц, 137 скриншотов, дампы API и исходники темы — лежат в рабочей папке проекта. Сессия админки сохранена, повторный вход без СМС возможен до истечения пробного периода.
+    </footer>
+  </main>
+</div>
+
+</body>
+</html>
