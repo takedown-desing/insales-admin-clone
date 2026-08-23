@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Мой магазин авто — админка</title>
+<meta name="description" content="Рабочая копия админки InSales: каталог, заказы, клиенты, контент и настройки.">
+<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="assets/app.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23262F3E'/><text x='16' y='23' font-size='19' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'>S</text></svg>">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <span class="logo">in<b>S</b>ales</span>
+      <button class="collapse" id="collapse" title="Свернуть меню">←|</button>
+    </div>
+    <nav class="nav" id="nav"></nav>
+  </aside>
+
+  <div class="main">
+    <div class="promo" id="promo">
+      <span>Спецпредложение</span>
+      <strong>Эквайринг + онлайн-касса на выгодных условиях</strong>
+      <button class="get">Получить</button>
+      <button class="x" id="promoclose" title="Закрыть">×</button>
+    </div>
+
+    <div class="topbar">
+      <button class="burger" id="burger">☰</button>
+      <span class="shopname">Мой магазин авто</span>
+      <a href="#/branding">Ваш сайт ↗</a>
+      <a href="#/domains">Опубликовать сайт</a>
+      <span class="sp"></span>
+      <label class="search"><span class="mg"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><input type="text" id="globalsearch" placeholder="Поиск"></label>
+      <button class="ticon" title="Диалоги"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 5h16v10H9l-5 4z"/></svg></button>
+      <button class="ticon" title="Помощь"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4A2.4 2.4 0 1 1 12 12v1.5M12 17h.01"/></svg></button>
+      <button class="ticon" title="Уведомления"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a5 5 0 0 0-5 5v3l-2 4h14l-2-4V8a5 5 0 0 0-5-5M9.5 19a2.5 2.5 0 0 0 5 0"/></svg><span class="dot"></span></button>
+      <span class="avatar">ПД</span>
+    </div>
+
+    <div class="trialbar"><span class="i">i</span>
+      <span>До конца тестового периода осталось 7 дней.</span>
+      <a href="#/invoices">Выбрать тариф</a>
+    </div>
+
+    <div class="banner-dev">
+      Демонстрационная копия интерфейса. Данные хранятся в браузере.
+      <a href="report.html">Как это устроено и что было измерено</a> ·
+      <a href="#" id="reset">Сбросить данные</a>
+    </div>
+
+    <div class="page" id="view"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="modalroot"></div>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
