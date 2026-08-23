@@ -6,17 +6,23 @@
 <title>Мой магазин авто — админка</title>
 <meta name="description" content="Рабочая копия админки InSales: каталог, заказы, клиенты, контент и настройки.">
 <meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=Mulish:wght@300;400;500;600;700&display=swap">
 <link rel="stylesheet" href="assets/app.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23262F3E'/><text x='16' y='23' font-size='19' font-family='Arial' font-weight='700' fill='white' text-anchor='middle'>S</text></svg>">
 </head>
 <body>
 <div class="app">
   <aside class="side" id="side">
-    <div class="brand">
+    <div class="sidenav__section sidenav__section--top">
       <span class="logo">in<b>S</b>ales</span>
-      <button class="collapse" id="collapse" title="Свернуть меню">←|</button>
+      <button class="collapse" id="collapse" title="Свернуть меню" aria-label="Свернуть меню">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h2v14H4zM20 11H10.8l3.6-3.6L13 6l-6 6 6 6 1.4-1.4-3.6-3.6H20z"/></svg>
+      </button>
     </div>
-    <nav class="nav" id="nav"></nav>
+    <nav class="sidenav__section sidenav__section--middle" id="nav"></nav>
+    <div class="sidenav__section sidenav__section--bottom" id="navfoot"></div>
   </aside>
 
   <div class="main">
