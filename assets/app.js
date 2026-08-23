@@ -4,6 +4,12 @@
 /* ---------------- store ---------------- */
 const KEY = 'insales-clone-v1';
 let DB = load();
+restoreStatuses();
+function restoreStatuses(){
+  if (!Array.isArray(DB._statuses) || !DB._statuses.length) return;
+  STATUSES.length = 0;
+  DB._statuses.forEach(s => { STATUSES.push(s); if (!PILL[s.key]) PILL[s.key] = 'grey'; });
+}
 
 function load() {
   try {
@@ -13,7 +19,7 @@ function load() {
   return JSON.parse(JSON.stringify(SEED));
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(DB)); }
-function reset() { localStorage.removeItem(KEY); DB = load(); toast('Данные восстановлены'); render(); }
+function reset() { localStorage.removeItem(KEY); DB = load(); restoreStatuses(); toast('Данные восстановлены'); render(); }
 function nextId(list) { return list.reduce((m, x) => Math.max(m, x.id || 0), 0) + 1; }
 
 /* ---------------- helpers ---------------- */
@@ -254,7 +260,7 @@ V.order = (id) => {
   return backTo('#/orders', 'Все заказы') + `
     <div class="page-head"><h1 class="title">Заказ ${o.number} от ${fmtDate(o.created_at)}</h1>
       <span class="sp"></span>
-      <button class="btn">Оформить доставку</button>
+      <button class="btn" id="shiporder">Оформить доставку</button>
       <button class="btn" id="copyorder">Копировать</button></div>
     <div class="cols" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr);align-items:start">
       <div>
@@ -289,6 +295,7 @@ V.order = (id) => {
               o.shipping_address.apartment && 'кв. ' + o.shipping_address.apartment].filter(Boolean).join(', '))}</dd>
             <dt>Способ доставки</dt><dd>${esc(o.delivery_title)}</dd>
             <dt>Дата доставки</dt><dd>${esc(o.delivery_date || '—')}</dd>
+            <dt>Трек-номер</dt><dd>${esc(o.track_number || '—')}</dd>
             <dt>Комментарий</dt><dd>${esc(o.comment || '—')}</dd>
           </dl></div></div>
 
@@ -338,6 +345,39 @@ V.order.bind = (id) => {
     o.manager_comment = $('#omc').value;
     if (o.financial_status === 'paid') o.paid_amount = o.total_price;
     save(); toast('Заказ сохранён'); render();
+  };
+  $('#shiporder').onclick = () => {
+    const root = $('#modalroot');
+    const w = o.order_lines.reduce((sum, l) => sum + num(l.weight) * l.quantity, 0);
+    root.innerHTML = `<div class="modal-bg"><div class="modal">
+      <h3>Оформление доставки — заказ ${o.number}</h3>
+      <div class="body">
+        <div class="row" style="grid-template-columns:150px 1fr"><label>Служба доставки</label>
+          <select id="sh_dv">${DB.delivery_variants.map(d =>
+            `<option value="${d.id}" ${d.id === o.delivery_variant_id ? 'selected' : ''}>${esc(d.title)}</option>`).join('')}</select></div>
+        <div class="row" style="grid-template-columns:150px 1fr"><label>Дата отгрузки</label>
+          <input type="date" id="sh_date" value="${esc(o.delivery_date || '')}"></div>
+        <div class="row" style="grid-template-columns:150px 1fr"><label>Трек-номер</label>
+          <input type="text" id="sh_track" value="${esc(o.track_number || '')}" placeholder="необязательно"></div>
+        <dl class="kv"><dt>Получатель</dt><dd>${esc(o.shipping_address.full_name)}</dd>
+          <dt>Адрес</dt><dd>${esc([o.shipping_address.zip, o.shipping_address.city,
+            o.shipping_address.street, o.shipping_address.house].filter(Boolean).join(', '))}</dd>
+          <dt>Мест</dt><dd>${o.order_lines.length}</dd>
+          <dt>Общий вес</dt><dd>${w.toFixed(2)} кг</dd></dl>
+      </div>
+      <div class="foot"><button class="btn" data-no>Отменить</button>
+        <button class="btn primary" data-ship>Отгрузить</button></div></div></div>`;
+    const close = () => (root.innerHTML = '');
+    $('[data-no]', root).onclick = close;
+    $('[data-ship]', root).onclick = () => {
+      const dv = DB.delivery_variants.find(d => d.id === +$('#sh_dv').value);
+      if (dv) { o.delivery_variant_id = dv.id; o.delivery_title = dv.title; o.delivery_price = dv.price; }
+      o.delivery_date = $('#sh_date').value;
+      o.track_number = $('#sh_track').value || null;
+      o.custom_status = 'otgruzhen';
+      o.fulfillment_status = 'shipped';
+      save(); close(); toast('Заказ отгружен, статус обновлён'); render();
+    };
   };
   $('#copyorder').onclick = () => {
     const copy = JSON.parse(JSON.stringify(o));
