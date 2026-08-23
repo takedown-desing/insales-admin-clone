@@ -545,3 +545,219 @@ SETTINGS_GROUPS.push(
     ['Дополнительные поля', '#/product_fields'], ['Типы цен', '#/price_kinds'],
     ['Аксессуары', '#/accessories'], ['Группы категорий', '#/stub/Группы категорий']]]
 );
+
+/* ================= Фильтры =================
+   Составы панелей сняты с реальных экранов InSales. */
+function fRange(key, label) {
+  const f = state.f || {};
+  return `<div class="fg"><b>${esc(label)}</b><div class="range">
+    <input type="number" placeholder="От" data-flt="${key}_from" value="${esc(f[key + '_from'] || '')}">
+    <span style="color:var(--ink-3)">–</span>
+    <input type="number" placeholder="До" data-flt="${key}_to" value="${esc(f[key + '_to'] || '')}">
+  </div></div>`;
+}
+function fRadio(key, label, opts) {
+  const f = state.f || {};
+  return `<div class="fg"><b>${esc(label)}</b><div class="radios">
+    ${opts.map(([v, t]) => `<label><input type="radio" name="f_${key}" data-flt="${key}" value="${v}"
+      ${(f[key] || '') === v ? 'checked' : ''}> ${esc(t)}</label>`).join('')}
+    <label><input type="radio" name="f_${key}" data-flt="${key}" value=""
+      ${!f[key] ? 'checked' : ''}> любой</label>
+  </div></div>`;
+}
+function filterPanel(inner) {
+  return `<div class="filters"><div class="fgrid">${inner}</div>
+    <div class="ffoot"><button class="btn primary" id="fapply">Применить</button>
+      <button class="btn" id="freset">Сбросить</button>
+      <span class="sp" style="flex:1"></span>
+      <span class="help" style="margin:0">Фильтры применяются к списку сразу</span></div></div>`;
+}
+function bindFilters() {
+  if (!$('#fapply')) return;
+  const read = () => {
+    const f = {};
+    document.querySelectorAll('[data-flt]').forEach(el => {
+      if (!('value' in el)) return;              // ссылки-вкладки сюда не попадают
+      if (el.type === 'radio' && !el.checked) return;
+      if (el.type === 'checkbox') { if (el.checked) f[el.dataset.flt] = '1'; return; }
+      if (el.value !== '') f[el.dataset.flt] = el.value;
+    });
+    return f;
+  };
+  $('#fapply').onclick = () => { state.f = read(); render(); };
+  $('#freset').onclick = () => { state.f = {}; render(); };
+}
+const inRange = (v, from, to) => {
+  const n = num(v);
+  if (from !== undefined && from !== '' && n < num(from)) return false;
+  if (to !== undefined && to !== '' && n > num(to)) return false;
+  return true;
+};
+
+/* ---- Цены и остатки: набор фильтров как в оригинале ---- */
+V.prices = () => {
+  const tab = state.ptab || 'all';
+  const f = state.f || {};
+  let list = DB.products.slice();
+  list = list.filter(p => {
+    const v = firstVariant(p);
+    if (!inRange(v.cost_price, f.cost_from, f.cost_to)) return false;
+    if (!inRange(v.price, f.price_from, f.price_to)) return false;
+    if (!inRange(v.old_price || 0, f.old_from, f.old_to)) return false;
+    if (!inRange(v.quantity, f.qty_from, f.qty_to)) return false;
+    if (f.barcode === 'yes' && !v.barcode) return false;
+    if (f.barcode === 'no' && v.barcode) return false;
+    if (f.photo === 'yes' && !(p.images || []).length) return false;
+    if (f.photo === 'no' && (p.images || []).length) return false;
+    if (f.kind === 'bundle' && !p.bundle) return false;
+    if (f.kind === 'product' && p.bundle) return false;
+    if (state.pq2 && !(p.title.toLowerCase().includes(state.pq2.toLowerCase()))) return false;
+    return true;
+  });
+  return head('Цены и остатки', `<button class="btn" id="bulk">Массовые изменения</button>
+      <button class="btn" id="ftoggle">Фильтры${Object.keys(f).length ? ' · ' + Object.keys(f).length : ''}</button>`) + `
+    <div class="tabs">
+      ${[['all', 'Все'], ['price', 'Цены'], ['stock', 'Остатки']].map(([k, t]) =>
+        `<a href="#" data-pt="${k}" class="${tab === k ? 'active' : ''}">${t}</a>`).join('')}
+    </div>
+    <div class="toolbar">
+      <input class="field-search" id="pq2" placeholder="Поиск" value="${esc(state.pq2 || '')}">
+      <span class="sp"></span><button class="btn" id="pricesCsv">Выгрузить в CSV</button>
+    </div>
+    ${state.fopen ? filterPanel(
+      fRadio('kind', 'Тип позиции', [['product', 'Товары'], ['bundle', 'Комплекты']]) +
+      fRadio('photo', 'Фото', [['yes', 'С фото'], ['no', 'Без фото']]) +
+      fRadio('barcode', 'Штрихкод', [['yes', 'Есть'], ['no', 'Нет']]) +
+      fRange('cost', 'Себестоимость') + fRange('price', 'Цена продажи') +
+      fRange('old', 'Цена до скидки') + fRange('qty', 'Остаток на складе')
+    ) : ''}
+    <div class="tablewrap"><table class="grid"><thead><tr>
+      <th>Название</th><th class="mono">Штрихкод</th>
+      ${tab !== 'stock' ? '<th class="num">Себестоимость</th><th class="num">Цена продажи</th><th class="num">Цена до скидки</th>' : ''}
+      ${tab !== 'price' ? '<th class="num">Склад</th>' : ''}
+      <th class="num">Наценка</th></tr></thead><tbody>
+    ${list.length ? list.map(p => { const v = firstVariant(p);
+      const marg = num(v.price) && num(v.cost_price) ? Math.round((num(v.price) - num(v.cost_price)) / num(v.price) * 100) : 0;
+      return `<tr><td>${esc(p.title)}</td><td class="mono">${esc(v.barcode || '')}</td>
+      ${tab !== 'stock' ? `
+        <td class="num"><input type="number" step="0.01" style="width:110px;text-align:right" data-pc="${p.id}" value="${num(v.cost_price)}"></td>
+        <td class="num"><input type="number" step="0.01" style="width:110px;text-align:right" data-pp="${p.id}" value="${num(v.price)}"></td>
+        <td class="num"><input type="number" step="0.01" style="width:110px;text-align:right" data-po="${p.id}" value="${v.old_price ? num(v.old_price) : ''}"></td>` : ''}
+      ${tab !== 'price' ? `<td class="num"><input type="number" style="width:90px;text-align:right" data-pq="${p.id}" value="${num(v.quantity)}"></td>` : ''}
+      <td class="num">${marg}%</td></tr>`; }).join('')
+      : `<tr><td colspan="7"><div class="empty"><h3>Ничего не найдено</h3>
+         <p>Ни одна позиция не подходит под выбранные фильтры.</p></div></td></tr>`}
+    </tbody></table></div>
+    <div class="formfoot"><button class="btn primary" id="savePrices">Сохранить изменения</button>
+      <span class="sp"></span><span class="help" style="margin:0">Показано: ${list.length} из ${DB.products.length}</span></div>`;
+};
+V.prices.bind = () => {
+  document.querySelectorAll('[data-pt]').forEach(a => a.onclick = e => {
+    e.preventDefault(); state.ptab = a.dataset.pt; render();
+  });
+  $('#ftoggle').onclick = () => { state.fopen = !state.fopen; render(); };
+  const q = $('#pq2');
+  q.onkeydown = e => { if (e.key === 'Enter') { state.pq2 = q.value; render(); } };
+  bindFilters();
+  $('#savePrices').onclick = () => {
+    DB.products.forEach(p => {
+      const v = firstVariant(p);
+      const c = document.querySelector(`[data-pc="${p.id}"]`); if (c) v.cost_price = String(num(c.value));
+      const pr = document.querySelector(`[data-pp="${p.id}"]`); if (pr) { v.price = String(num(pr.value)); v.base_price = v.price; }
+      const o = document.querySelector(`[data-po="${p.id}"]`); if (o) v.old_price = o.value ? String(num(o.value)) : null;
+      const qq = document.querySelector(`[data-pq="${p.id}"]`); if (qq) { v.quantity = Math.round(num(qq.value)); v.quantity_at_warehouse0 = v.quantity + '.0'; }
+    });
+    save(); toast('Цены и остатки сохранены'); render();
+  };
+  $('#bulk').onclick = () => {
+    const pct = prompt('Изменить все цены на, %  (например 10 или -5)');
+    if (pct === null || pct === '') return;
+    const k = 1 + num(pct) / 100;
+    DB.products.forEach(p => { const v = firstVariant(p); v.price = String(Math.round(num(v.price) * k * 100) / 100); v.base_price = v.price; });
+    save(); toast('Цены пересчитаны на ' + pct + '%'); render();
+  };
+  $('#pricesCsv').onclick = () => exportCsv('prices.csv',
+    ['Название', 'Штрихкод', 'Себестоимость', 'Цена', 'Цена до скидки', 'Остаток'],
+    DB.products.map(p => { const v = firstVariant(p);
+      return [p.title, v.barcode, v.cost_price, v.price, v.old_price, v.quantity]; }));
+};
+
+/* ---- Фильтр заказов ---- */
+const _orders = V.orders, _ordersBind = V.orders.bind;
+V.orders = () => {
+  const f = state.f || {};
+  let html = _orders();
+  const panel = state.fopen ? filterPanel(
+    `<div class="fg"><b>Статус заказа</b><select data-flt="status">
+      <option value="">любой</option>
+      ${STATUSES.map(s => `<option value="${s.key}" ${f.status === s.key ? 'selected' : ''}>${esc(s.title)}</option>`).join('')}
+    </select></div>` +
+    fRadio('paid', 'Оплата', [['yes', 'Оплачен'], ['no', 'Не оплачен']]) +
+    `<div class="fg"><b>Способ доставки</b><select data-flt="dv">
+      <option value="">любой</option>
+      ${DB.delivery_variants.map(d => `<option value="${d.id}" ${String(f.dv) === String(d.id) ? 'selected' : ''}>${esc(d.title)}</option>`).join('')}
+    </select></div>` +
+    fRange('sum', 'Сумма заказа')
+  ) : '';
+  html = html.replace('<div class="tablewrap">', panel + '<div class="tablewrap">');
+  html = html.replace('<button class="btn" id="ofind">',
+    `<button class="btn" id="ftoggle">Фильтры${Object.keys(f).length ? ' · ' + Object.keys(f).length : ''}</button><button class="btn" id="ofind">`);
+  // применить фильтры к строкам
+  if (Object.keys(f).length) {
+    const keep = DB.orders.filter(o =>
+      (!f.status || o.custom_status === f.status) &&
+      (!f.paid || (f.paid === 'yes') === (o.financial_status === 'paid')) &&
+      (!f.dv || String(o.delivery_variant_id) === String(f.dv)) &&
+      inRange(o.total_price, f.sum_from, f.sum_to)
+    ).map(o => o.id);
+    DB.orders.forEach(o => {
+      if (!keep.includes(o.id)) {
+        const re = new RegExp(`<tr class="[^"]*">\\s*<td><input type="checkbox"></td>\\s*<td><a href="#/orders/${o.id}"[\\s\\S]*?</tr>`);
+        html = html.replace(re, '');
+      }
+    });
+  }
+  return html;
+};
+V.orders.bind = () => {
+  _ordersBind();
+  if ($('#ftoggle')) $('#ftoggle').onclick = () => { state.fopen = !state.fopen; render(); };
+  bindFilters();
+};
+
+/* ---- Фильтр каталога ---- */
+const _products = V.products, _productsBind = V.products.bind;
+V.products = () => {
+  const f = state.f || {};
+  let html = _products();
+  const panel = state.fopen ? filterPanel(
+    fRadio('vis', 'Видимость', [['on', 'Показывается'], ['off', 'Скрыт']]) +
+    fRadio('stock', 'Наличие', [['yes', 'Есть на складе'], ['no', 'Нет в наличии']]) +
+    fRange('price', 'Цена продажи') + fRange('qty', 'Остаток')
+  ) : '';
+  html = html.replace('<div class="toolbar">', panel ? panel + '<div class="toolbar">' : '<div class="toolbar">');
+  html = html.replace('<button class="btn" id="pfind">',
+    `<button class="btn" id="ftoggle">Фильтры${Object.keys(f).length ? ' · ' + Object.keys(f).length : ''}</button><button class="btn" id="pfind">`);
+  if (Object.keys(f).length) {
+    DB.products.forEach(p => {
+      const v = firstVariant(p);
+      let ok = true;
+      if (f.vis === 'on' && p.is_hidden) ok = false;
+      if (f.vis === 'off' && !p.is_hidden) ok = false;
+      if (f.stock === 'yes' && num(v.quantity) <= 0) ok = false;
+      if (f.stock === 'no' && num(v.quantity) > 0) ok = false;
+      if (!inRange(v.price, f.price_from, f.price_to)) ok = false;
+      if (!inRange(v.quantity, f.qty_from, f.qty_to)) ok = false;
+      if (!ok) {
+        const re = new RegExp(`<tr>\\s*<td><input type="checkbox" data-sel="${p.id}">[\\s\\S]*?</tr>`);
+        html = html.replace(re, '');
+      }
+    });
+  }
+  return html;
+};
+V.products.bind = () => {
+  _productsBind();
+  if ($('#ftoggle')) $('#ftoggle').onclick = () => { state.fopen = !state.fopen; render(); };
+  bindFilters();
+};
