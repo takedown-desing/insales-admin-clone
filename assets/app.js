@@ -187,6 +187,7 @@ V.orders = () => {
   let list = DB.orders.slice();
   if (f === 'open') list = list.filter(o => ['novy', 'obrabotka', 'soglasovan'].includes(o.custom_status));
   if (f === 'closed') list = list.filter(o => ['dostavlen', 'otmenen', 'vozvrat'].includes(o.custom_status));
+  if (f === 'deleted') list = list.filter(o => o.archived);
   if (q) list = list.filter(o => String(o.number).includes(q) ||
     (o.shipping_address.full_name || '').toLowerCase().includes(q) ||
     (o.shipping_address.city || '').toLowerCase().includes(q));
@@ -195,12 +196,15 @@ V.orders = () => {
       <a href="#" data-f="all" class="${f === 'all' ? 'active' : ''}">Все</a>
       <a href="#" data-f="open" class="${f === 'open' ? 'active' : ''}">Открытые</a>
       <a href="#" data-f="closed" class="${f === 'closed' ? 'active' : ''}">Закрытые</a>
+      <a href="#" data-f="deleted" class="${f === 'deleted' ? 'active' : ''}">Удалённые</a>
+      <a href="#/order_views">Виды заказов</a>
     </div>
     <div class="toolbar">
       <button class="btn" id="neworder">+ Заказ</button>
       <button class="btn" id="exportorders">Экспорт ▾</button>
       <span class="sp"></span>
       <input class="field-search" id="oq" placeholder="Номер заказа, адрес доставки или данные покупателя" value="${esc(state.q || '')}">
+      <button class="btn" id="ocols" title="Настроить колонки">⚙</button>
       <button class="btn" id="ofind"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> Найти</button>
     </div>
     <div class="tablewrap"><table class="grid"><thead><tr>
@@ -230,6 +234,7 @@ V.orders.bind = () => {
   $('#ofind').onclick = () => { state.q = inp.value; render(); };
   inp.onkeydown = e => { if (e.key === 'Enter') { state.q = inp.value; render(); } };
   $('#neworder').onclick = () => { toast('Создание заказа вручную — в разработке'); };
+  $('#ocols').onclick = () => toast('Настройка колонок таблицы заказов');
   $('#exportorders').onclick = () => exportCsv('orders.csv',
     ['Номер', 'Создан', 'Покупатель', 'Сумма', 'Статус', 'Оплата', 'Доставка'],
     DB.orders.map(o => [o.number, o.created_at, o.shipping_address.full_name,
@@ -373,10 +378,10 @@ V.products = () => {
           <button class="btn" id="pexport">Экспорт CSV</button>
         </div>
         ${list.length ? `<div class="tablewrap"><table class="grid"><thead><tr>
-          <th style="width:34px"></th><th>Фото</th><th>Артикул</th><th>Название</th>
+          <th style="width:34px"><input type="checkbox" id="selall"></th><th>Фото</th><th>Артикул</th><th>Название</th>
           <th class="num">Цена</th><th class="num">Остаток</th><th>Показывать</th><th></th></tr></thead><tbody>
         ${list.map(p => { const v = firstVariant(p); return `<tr>
-          <td><input type="checkbox"></td><td><div class="thumb">▦</div></td>
+          <td><input type="checkbox" data-sel="${p.id}"></td><td><div class="thumb">▦</div></td>
           <td class="mono">${esc(v.sku || '')}</td>
           <td><a href="#/products/${p.id}" class="rowlink">${esc(p.title)}</a>
             ${p.is_hidden ? ' <span class="pill grey">скрыт</span>' : ''}</td>
@@ -401,7 +406,56 @@ V.products.bind = () => {
   const add = () => go('#/products/new');
   $('#addproduct').onclick = add;
   if ($('#addproduct2')) $('#addproduct2').onclick = add;
-  $('#prodactions').onclick = () => toast('Массовые действия: скрыть, назначить категорию, удалить');
+  const selected = () => Array.from(document.querySelectorAll('[data-sel]:checked')).map(c => +c.dataset.sel);
+  if ($('#selall')) $('#selall').onchange = e =>
+    document.querySelectorAll('[data-sel]').forEach(c => { c.checked = e.target.checked; });
+  $('#prodactions').onclick = () => {
+    const ids = selected();
+    if (!ids.length) return toast('Отметьте товары галочками');
+    const acts = [
+      ['make_hidden', 'Скрыть'], ['remove_hidden', 'Показать'],
+      ['batch_set_category', 'Назначить категорию'],
+      ['set_no_delivery', 'Запретить доставку'], ['clear_no_delivery', 'Разрешить доставку'],
+      ['add_characteristic', 'Добавить характеристику'], ['group_destroy', 'Удалить'],
+    ];
+    const root = $('#modalroot');
+    root.innerHTML = `<div class="modal-bg"><div class="modal">
+      <h3>Другие действия — выбрано ${ids.length}</h3>
+      <div class="body">${acts.map(([k, t]) =>
+        `<div style="padding:7px 0;border-bottom:1px solid var(--line)">
+          <a href="#" data-act="${k}">${t}</a>
+          <span class="mono help" style="float:right">${k}</span></div>`).join('')}
+        <div class="help" style="margin-top:12px">Это реальные маршруты групповых операций,
+          найденные в каталоге InSales.</div></div>
+      <div class="foot"><button class="btn" data-no>Закрыть</button></div></div></div>`;
+    const close = () => (root.innerHTML = '');
+    $('[data-no]', root).onclick = close;
+    root.querySelectorAll('[data-act]').forEach(a => a.onclick = ev => {
+      ev.preventDefault();
+      const k = a.dataset.act;
+      const hit = p => ids.includes(p.id);
+      if (k === 'make_hidden') DB.products.forEach(p => { if (hit(p)) p.is_hidden = true; });
+      if (k === 'remove_hidden') DB.products.forEach(p => { if (hit(p)) p.is_hidden = false; });
+      if (k === 'set_no_delivery') DB.products.forEach(p => { if (hit(p)) p.available = false; });
+      if (k === 'clear_no_delivery') DB.products.forEach(p => { if (hit(p)) p.available = true; });
+      if (k === 'batch_set_category') {
+        const c = prompt('ID категории витрины\n' + DB.collections.map(x => x.id + ' — ' + x.title).join('\n'));
+        if (c) DB.products.forEach(p => { if (hit(p) && !p.collections_ids.includes(+c)) p.collections_ids.push(+c); });
+      }
+      if (k === 'add_characteristic') {
+        const t = prompt('Название характеристики');
+        if (t) DB.products.forEach(p => { if (hit(p)) p.characteristics.push({ title: t }); });
+      }
+      if (k === 'group_destroy') {
+        close();
+        return confirmDialog(`Удалить товаров: ${ids.length}?`, () => {
+          DB.products = DB.products.filter(p => !ids.includes(p.id));
+          save(); toast('Удалено: ' + ids.length); render();
+        });
+      }
+      save(); close(); toast('Применено к товарам: ' + ids.length); render();
+    });
+  };
   $('#addcol').onclick = () => {
     const t = prompt('Название категории'); if (!t) return;
     DB.collections.push({ id: nextId(DB.collections), parent_id: 56930233, title: t,
@@ -497,6 +551,7 @@ V.product = (id) => {
 };
 V.product.bind = (id) => {
   const isNew = id === 'new';
+  if (!$('#saveproduct')) return;
   $('#saveproduct').onclick = () => {
     const title = $('#f_title').value.trim();
     if (!title) { toast('Заполните название'); $('#f_title').focus(); return; }
@@ -661,6 +716,7 @@ V.client = (id) => {
 };
 V.client.bind = (id) => {
   const isNew = id === 'new';
+  if (!$('#saveclient')) return;
   $('#saveclient').onclick = () => {
     const name = $('#c_name').value.trim();
     if (!name) { toast('Заполните имя'); return; }
@@ -720,6 +776,7 @@ V.page = (id) => {
 };
 V.page.bind = (id) => {
   const isNew = id === 'new';
+  if (!$('#savepage')) return;
   $('#savepage').onclick = () => {
     const t = $('#pg_title').value.trim(); if (!t) { toast('Заполните заголовок'); return; }
     let p = isNew ? null : DB.pages.find(x => x.id === +id);
@@ -771,6 +828,7 @@ V.article = (id) => {
 };
 V.article.bind = (id) => {
   const isNew = id === 'new';
+  if (!$('#saveart')) return;
   $('#saveart').onclick = () => {
     const t = $('#a_title').value.trim(); if (!t) { toast('Заполните заголовок'); return; }
     let a = isNew ? null : DB.articles.find(x => x.id === +id);
