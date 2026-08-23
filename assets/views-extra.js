@@ -761,3 +761,257 @@ V.products.bind = () => {
   if ($('#ftoggle')) $('#ftoggle').onclick = () => { state.fopen = !state.fopen; render(); };
   bindFilters();
 };
+
+/* ================= Категории витрины с SEO-полями ================= */
+V.collections = () => {
+  const tree = DB.collections.filter(c => !c.parent_id);
+  const kids = pid => DB.collections.filter(c => c.parent_id === pid);
+  const row = (c, lvl) => `<tr>
+    <td style="padding-left:${8 + lvl * 22}px"><a href="#/collections/${c.id}" class="rowlink">${esc(c.title)}</a></td>
+    <td class="mono">${esc(c.url || '/collection/' + c.permalink)}</td>
+    <td style="color:${c.html_title ? 'inherit' : 'var(--ink-3)'}">${esc(c.html_title || 'из SEO-шаблона')}</td>
+    <td>${c.is_hidden ? '—' : 'да'}</td>
+    <td class="num">${DB.products.filter(p => (p.collections_ids || []).includes(c.id)).length}</td>
+    <td><button class="btn sm danger" data-delcol="${c.id}">Удалить</button></td></tr>`;
+  const rows = tree.map(c => row(c, 0) + kids(c.id).map(k => row(k, 1)).join('')).join('');
+  return head('Категории витрины', `<button class="btn primary" id="addcol2">Добавить категорию</button>`) + `
+    <div class="notice info">У каждой категории свои тег title, мета-описание и адрес.
+      При переносе магазина это переносится вместе с товарами — иначе просядут позиции по категорийным запросам.</div>
+    <div class="tablewrap"><table class="grid"><thead><tr>
+      <th>Название</th><th class="mono">Адрес</th><th>Тег title</th><th>Показывать</th>
+      <th class="num">Товаров</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`;
+};
+V.collections.bind = () => {
+  $('#addcol2').onclick = () => {
+    const t = prompt('Название категории'); if (!t) return;
+    DB.collections.push({ id: nextId(DB.collections), parent_id: DB.collections[0] ? DB.collections[0].id : null,
+      title: t, permalink: slugify(t), url: '/collection/' + slugify(t), is_hidden: false,
+      position: DB.collections.length + 1, sort_type: 7,
+      html_title: null, meta_description: null, meta_keywords: null, description: null });
+    save(); toast('Категория создана'); render();
+  };
+  document.querySelectorAll('[data-delcol]').forEach(b => b.onclick = () =>
+    confirmDialog('Удалить категорию? Товары останутся в каталоге.', () => {
+      const id = +b.dataset.delcol;
+      DB.collections = DB.collections.filter(c => c.id !== id && c.parent_id !== id);
+      DB.products.forEach(p => { p.collections_ids = (p.collections_ids || []).filter(x => x !== id); });
+      save(); toast('Категория удалена'); render();
+    }));
+};
+
+V.collection = (id) => {
+  const c = DB.collections.find(x => x.id === +id);
+  if (!c) return `<div class="empty"><h3>Категория не найдена</h3></div>`;
+  const val = k => esc(c[k] != null ? c[k] : '');
+  const others = DB.collections.filter(x => x.id !== c.id);
+  return backTo('#/collections', 'Категории витрины') + `
+    <div class="page-head"><h1 class="title">${esc(c.title)}</h1><span class="sp"></span>
+      <button class="btn primary" id="savecol">Сохранить</button></div>
+    <div class="card"><h3>Основное</h3><div class="body">
+      <div class="row"><label>Название <span class="req">*</span></label><input type="text" id="co_title" value="${val('title')}"></div>
+      <div class="row"><label>Родительская категория</label><select id="co_parent">
+        <option value="">— верхний уровень —</option>
+        ${others.map(o => `<option value="${o.id}" ${c.parent_id === o.id ? 'selected' : ''}>${esc(o.title)}</option>`).join('')}
+      </select></div>
+      <div class="row"><label>Адрес</label>
+        <div class="prefix"><span class="pre">${esc(DB.account.main_host)}/collection/</span>
+          <input type="text" id="co_perm" value="${val('permalink')}"></div></div>
+      <div class="row"><label>Описание</label><textarea id="co_desc">${val('description')}</textarea></div>
+      <div class="row"><label>Сортировка товаров</label><select id="co_sort">
+        ${[[1,'по имени'],[2,'по цене, сначала дешёвые'],[3,'по цене, сначала дорогие'],[7,'вручную']]
+          .map(([v,t])=>`<option value="${v}" ${c.sort_type==v?'selected':''}>${t}</option>`).join('')}
+      </select></div>
+      <label class="check"><input type="checkbox" id="co_show" ${!c.is_hidden ? 'checked' : ''}> Показывать категорию на сайте</label>
+    </div></div>
+    <div class="card"><h3>Поисковая оптимизация</h3><div class="body">
+      <div class="row"><label>Тег title</label><input type="text" id="co_htitle" value="${val('html_title')}"
+        placeholder="Если пусто — подставится SEO-шаблон категорий"></div>
+      <div class="row"><label>Мета-тег description</label><textarea id="co_mdesc" style="min-height:70px"
+        placeholder="Если пусто — подставится SEO-шаблон категорий">${val('meta_description')}</textarea></div>
+      <div class="row"><label>Мета-тег keywords</label><input type="text" id="co_mkw" value="${val('meta_keywords')}"></div>
+    </div></div>
+    <div class="card"><h3>Товары в категории</h3><div class="body">
+      ${DB.products.filter(p => (p.collections_ids || []).includes(c.id)).map(p =>
+        `<div style="padding:5px 0;border-bottom:1px solid var(--line)"><a href="#/products/${p.id}">${esc(p.title)}</a></div>`).join('')
+        || '<div class="help">В категории пока нет товаров</div>'}
+    </div></div>`;
+};
+V.collection.bind = (id) => {
+  if (!$('#savecol')) return;
+  $('#savecol').onclick = () => {
+    const c = DB.collections.find(x => x.id === +id);
+    const t = $('#co_title').value.trim(); if (!t) return toast('Заполните название');
+    c.title = t;
+    c.parent_id = $('#co_parent').value ? +$('#co_parent').value : null;
+    c.permalink = $('#co_perm').value.trim() || slugify(t);
+    c.url = '/collection/' + c.permalink;
+    c.description = $('#co_desc').value || null;
+    c.sort_type = +$('#co_sort').value;
+    c.is_hidden = !$('#co_show').checked;
+    c.html_title = $('#co_htitle').value || null;
+    c.meta_description = $('#co_mdesc').value || null;
+    c.meta_keywords = $('#co_mkw').value || null;
+    save(); toast('Категория сохранена'); go('#/collections');
+  };
+};
+
+/* ================= Пользовательские статусы: правка ================= */
+V.statuses = () => head('Пользовательские статусы', `<button class="btn primary" id="addst">Добавить статус</button>`) + `
+  <div class="notice info">В InSales эти статусы редактирует сам клиент. Поэтому список настраиваемый,
+    а не захардкоженный: переименование сразу отражается в заказах и фильтрах.</div>
+  <div class="tablewrap"><table class="grid"><thead><tr><th style="width:60px">Порядок</th>
+    <th>Статус</th><th class="mono">Ключ</th><th>По умолчанию</th>
+    <th class="num">Заказов</th><th></th></tr></thead><tbody>
+  ${STATUSES.map((s, i) => `<tr>
+    <td><button class="btn sm icon" data-stup="${s.key}" ${i === 0 ? 'disabled' : ''}>↑</button></td>
+    <td><span class="pill ${PILL[s.key] || 'grey'}">${esc(s.title)}</span>
+      <input type="text" data-sttitle="${s.key}" value="${esc(s.title)}" style="max-width:220px;margin-left:8px;display:inline-block;width:auto"></td>
+    <td class="mono">${esc(s.key)}</td>
+    <td><input type="radio" name="stdef" data-stdef="${s.key}" ${s.is_default ? 'checked' : ''}></td>
+    <td class="num">${DB.orders.filter(o => o.custom_status === s.key).length}</td>
+    <td><button class="btn sm danger" data-stdel="${s.key}">Удалить</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="formfoot"><button class="btn primary" id="savest">Сохранить</button></div>`;
+V.statuses.bind = () => {
+  $('#addst').onclick = () => {
+    const t = prompt('Название статуса'); if (!t) return;
+    const key = slugify(t) || 'status' + STATUSES.length;
+    STATUSES.push({ key, title: t, is_default: false });
+    PILL[key] = 'grey'; DB._statuses = STATUSES; save(); toast('Статус добавлен'); render();
+  };
+  $('#savest').onclick = () => {
+    STATUSES.forEach(s => {
+      const t = document.querySelector(`[data-sttitle="${s.key}"]`); if (t && t.value.trim()) s.title = t.value.trim();
+      const d = document.querySelector(`[data-stdef="${s.key}"]`); if (d) s.is_default = d.checked;
+    });
+    DB._statuses = STATUSES; save(); toast('Статусы сохранены'); render();
+  };
+  document.querySelectorAll('[data-stdel]').forEach(b => b.onclick = () => {
+    const key = b.dataset.stdel;
+    const used = DB.orders.filter(o => o.custom_status === key).length;
+    if (used) return toast(`Нельзя удалить: статус стоит у ${used} заказ(ов)`);
+    confirmDialog('Удалить статус?', () => {
+      const i = STATUSES.findIndex(s => s.key === key);
+      if (i >= 0) STATUSES.splice(i, 1);
+      DB._statuses = STATUSES; save(); toast('Статус удалён'); render();
+    });
+  });
+  document.querySelectorAll('[data-stup]').forEach(b => b.onclick = () => {
+    const i = STATUSES.findIndex(s => s.key === b.dataset.stup);
+    if (i > 0) { const t = STATUSES[i - 1]; STATUSES[i - 1] = STATUSES[i]; STATUSES[i] = t; }
+    DB._statuses = STATUSES; save(); render();
+  });
+};
+
+/* ================= Поля форм: правка ================= */
+V.fields = () => head('Поля форм', `<button class="btn primary" id="addfld">Добавить поле</button>`) + `
+  <div class="tablewrap"><table class="grid"><thead><tr><th>Название</th><th class="mono">Handle</th>
+    <th>Назначение</th><th>Тип</th><th>Обязательное</th><th>В чекауте</th><th></th></tr></thead><tbody>
+  ${DB.fields.map(f => `<tr>
+    <td><input type="text" data-fldt="${f.id}" value="${esc(f.title)}" style="max-width:240px"></td>
+    <td class="mono">${esc(f.handle)}</td>
+    <td><select data-flddest="${f.id}" style="max-width:140px">
+      ${[['client','клиент'],['address','адрес'],['order','заказ']].map(([v,t])=>
+        `<option value="${v}" ${f.destiny===v?'selected':''}>${t}</option>`).join('')}</select></td>
+    <td><select data-fldtype="${f.id}" style="max-width:130px">
+      ${['string','text','phone','email','checkbox','select'].map(t=>
+        `<option ${f.type===t?'selected':''}>${t}</option>`).join('')}</select></td>
+    <td><input type="checkbox" data-fldob="${f.id}" ${f.obligatory?'checked':''}></td>
+    <td><input type="checkbox" data-fldch="${f.id}" ${f.show_in_checkout?'checked':''}></td>
+    <td><button class="btn sm danger" data-flddel="${f.id}">Удалить</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="formfoot"><button class="btn primary" id="savefld">Сохранить</button>
+    <span class="help" style="margin:0">Эти поля видит покупатель при оформлении заказа</span></div>`;
+V.fields.bind = () => {
+  $('#addfld').onclick = () => {
+    const t = prompt('Название поля'); if (!t) return;
+    DB.fields.push({ id: nextId(DB.fields), title: t, handle: slugify(t) || 'field',
+      destiny: 'order', type: 'string', obligatory: false, show_in_checkout: true });
+    save(); toast('Поле добавлено'); render();
+  };
+  $('#savefld').onclick = () => {
+    DB.fields.forEach(f => {
+      const t = document.querySelector(`[data-fldt="${f.id}"]`); if (t) f.title = t.value;
+      const d = document.querySelector(`[data-flddest="${f.id}"]`); if (d) f.destiny = d.value;
+      const ty = document.querySelector(`[data-fldtype="${f.id}"]`); if (ty) f.type = ty.value;
+      const o = document.querySelector(`[data-fldob="${f.id}"]`); if (o) f.obligatory = o.checked;
+      const c = document.querySelector(`[data-fldch="${f.id}"]`); if (c) f.show_in_checkout = c.checked;
+    });
+    save(); toast('Поля сохранены'); render();
+  };
+  document.querySelectorAll('[data-flddel]').forEach(b => b.onclick = () =>
+    confirmDialog('Удалить поле формы?', () => {
+      DB.fields = DB.fields.filter(f => f.id !== +b.dataset.flddel); save(); toast('Удалено'); render();
+    }));
+};
+
+/* ================= Опции товаров: правка ================= */
+V.options = () => head('Опции товаров', `<button class="btn primary" id="addopt">Добавить опцию</button>`) + `
+  <div class="notice info">Опции формируют варианты товара — размер, цвет и подобное.
+    Отмеченные «в фильтрах» участвуют в фильтрации на витрине.</div>
+  <div class="tablewrap"><table class="grid"><thead><tr><th>Название</th><th class="mono">Пермалинк</th>
+    <th>В фильтрах</th><th class="num">Позиция</th><th></th></tr></thead><tbody>
+  ${DB.option_names.map(o => `<tr>
+    <td><input type="text" data-optt="${o.id}" value="${esc(o.title)}" style="max-width:220px"></td>
+    <td class="mono">${esc(o.permalink)}</td>
+    <td><input type="checkbox" data-optn="${o.id}" ${o.navigational ? 'checked' : ''}></td>
+    <td class="num">${o.position}</td>
+    <td><button class="btn sm danger" data-optdel="${o.id}">Удалить</button></td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="formfoot"><button class="btn primary" id="saveopt">Сохранить</button></div>`;
+V.options.bind = () => {
+  $('#addopt').onclick = () => {
+    const t = prompt('Название опции. Примеры: Размер, Цвет'); if (!t) return;
+    DB.option_names.push({ id: nextId(DB.option_names), title: t, permalink: slugify(t) || 'opt',
+      position: DB.option_names.length + 1, navigational: true });
+    save(); toast('Опция добавлена'); render();
+  };
+  $('#saveopt').onclick = () => {
+    DB.option_names.forEach(o => {
+      const t = document.querySelector(`[data-optt="${o.id}"]`); if (t) o.title = t.value;
+      const n = document.querySelector(`[data-optn="${o.id}"]`); if (n) o.navigational = n.checked;
+    });
+    save(); toast('Опции сохранены'); render();
+  };
+  document.querySelectorAll('[data-optdel]').forEach(b => b.onclick = () =>
+    confirmDialog('Удалить опцию?', () => {
+      DB.option_names = DB.option_names.filter(o => o.id !== +b.dataset.optdel);
+      save(); toast('Удалено'); render();
+    }));
+};
+
+/* ================= Системные сниппеты: просмотр и правка ================= */
+V.system_snippets = () => head('Системные сниппеты', `<button class="btn primary" id="addsn">Добавить сниппет</button>`) + `
+  <div class="notice">Это инклюды платформы, которые подставляются в шаблоны темы. В исходниках темы
+    их нет — при переносе магазина логику этих сниппетов придётся воспроизводить самостоятельно.</div>
+  ${DB.system_snippets.map(s => `<div class="card"><h3>${esc(s.title)}</h3><div class="body">
+    <div class="help" style="margin:0 0 10px">${esc(s.note)}</div>
+    <textarea class="code" data-snc="${s.id}" style="min-height:110px">${esc(s.content || '{% comment %} содержимое сниппета {% endcomment %}')}</textarea>
+    <div style="margin-top:10px"><button class="btn sm danger" data-sndel="${s.id}">Удалить</button></div>
+  </div></div>`).join('')}
+  <div class="formfoot"><button class="btn primary" id="savesn">Сохранить все</button></div>`;
+V.system_snippets.bind = () => {
+  $('#addsn').onclick = () => {
+    const t = prompt('Имя сниппета'); if (!t) return;
+    DB.system_snippets.push({ id: nextId(DB.system_snippets), title: t, note: 'пользовательский', content: '' });
+    save(); toast('Сниппет добавлен'); render();
+  };
+  $('#savesn').onclick = () => {
+    DB.system_snippets.forEach(s => {
+      const c = document.querySelector(`[data-snc="${s.id}"]`); if (c) s.content = c.value;
+    });
+    save(); toast('Сниппеты сохранены');
+  };
+  document.querySelectorAll('[data-sndel]').forEach(b => b.onclick = () =>
+    confirmDialog('Удалить сниппет?', () => {
+      DB.system_snippets = DB.system_snippets.filter(s => s.id !== +b.dataset.sndel);
+      save(); toast('Удалено'); render();
+    }));
+};
+
+ROUTES.push([/^#\/collections$/, 'collections'], [/^#\/collections\/(.+)$/, 'collection']);
+(function addCollectionsToNav() {
+  const goods = NAV.find(n => n.t === 'Товары');
+  goods.sub.splice(1, 0, ['Категории витрины', '#/collections']);
+  SETTINGS_GROUPS[3][1].splice(0, 0, ['Категории витрины', '#/collections']);
+})();
